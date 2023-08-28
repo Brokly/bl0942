@@ -60,9 +60,11 @@ class BL0942 : public PollingComponent, public uart::UARTDevice {
   // Divide by this to turn into kWh
   float energy_reference_ = BL0942_EREF;
 
-  static bool validate_checksum(DataPacket *data);
+  DataPacket buffer;
+  uint8_t inpos=0xFF;
+  uint8_t checksum;
+  uint8_t pubPhase=0xFF;
 
-  void received_package_(DataPacket *data);
 };
 }  // namespace bl0942
 }  // namespace esphome
