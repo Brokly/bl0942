@@ -33,7 +33,7 @@ const uint8_t BL0942_INIT[5][6] = {
   uint8_t inpos=0;
   
 void BL0942::loop() {
-  while (this->available()) {
+  if (this->available()) {
     read_array((uint8_t*)(&buffer)+inpos,1);
     if(++inpos>=sizeof(buffer)){
        inpos=0; 
