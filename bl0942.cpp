@@ -31,19 +31,6 @@ const uint8_t BL0942_INIT[5][6] = {
     {BL0942_WRITE_COMMAND, BL0942_REG_I_FAST_RMS_CTRL, 0x1C, 0x18, 0x00, 0x1B}};
 
 void BL0942::loop() {
-  DataPacket buffer;
-  if (!this->available()) {
-    return;
-  }
-  if (read_array((uint8_t *) &buffer, sizeof(buffer))) {
-    if (validate_checksum(&buffer)) {
-      received_package_(&buffer);
-    }
-  } else {
-    ESP_LOGW(TAG, "Junk on wire. Throwing away partial message");
-    while (read() >= 0)
-      ;
-  }
 }
 
 bool BL0942::validate_checksum(DataPacket *data) {
@@ -61,6 +48,17 @@ bool BL0942::validate_checksum(DataPacket *data) {
 }
 
 void BL0942::update() {
+  if (this->available()) {
+    DataPacket buffer;
+    if (read_array((uint8_t *) &buffer, sizeof(buffer))) {
+      if (validate_checksum(&buffer)) {
+        received_package_(&buffer);
+      }
+    } else {
+      ESP_LOGW(TAG, "Junk on wire. Throwing away partial message");
+      while (read() >= 0);
+    }
+  }
   this->flush();
   this->write_byte(BL0942_READ_COMMAND);
   this->write_byte(BL0942_FULL_PACKET);
