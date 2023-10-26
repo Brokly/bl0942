@@ -64,6 +64,7 @@ class BL0942 : public PollingComponent, public uart::UARTDevice {
   uint8_t inpos=0xFF;
   uint8_t checksum;
   uint8_t pubPhase=0xFF;
+  bool needUpdate=false;
 
 };
 }  // namespace bl0942

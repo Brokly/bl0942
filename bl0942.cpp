@@ -31,70 +31,70 @@ const uint8_t BL0942_INIT[5][6] = {
 
 void BL0942::loop() {
   if (this->available()) {
-    uint8_t in;
-    read_array(&in,1);
-    if(inpos<sizeof(buffer)-1){ // читаем тело пакета
-       ((uint8_t*)(&buffer))[inpos]=in;
-       inpos++;
-       checksum += in;
-    } else if(inpos<sizeof(buffer)){ // получили контрольную сумму
-       inpos++;
-       checksum^=0xFF;
-       if(in!=checksum){
-          ESP_LOGE(TAG, "BL0942 invalid checksum! 0x%02X != 0x%02X", checksum, in);
+    while (this->available()) {
+       uint8_t in;
+       read_array(&in,1);
+       if(inpos<sizeof(buffer)-1){ // читаем тело пакета
+          ((uint8_t*)(&buffer))[inpos]=in;
+          inpos++;
+          checksum += in;
+       } else if(inpos<sizeof(buffer)){ // получили контрольную сумму
+          inpos++;
+          checksum^=0xFF;
+          if(in!=checksum){
+             ESP_LOGE(TAG, "BL0942 invalid checksum! 0x%02X != 0x%02X", checksum, in);
+          } else {
+             pubPhase=0;
+          }
        } else {
-          pubPhase=0;
-       }
-    } else {
-       if(in==BL0942_PACKET_HEADER){ // стартовый хидер
-          ((uint8_t*)(&buffer))[0]=BL0942_PACKET_HEADER;
-          inpos=1; // начало сохранения буфера  
-          checksum=BL0942_READ_COMMAND+BL0942_PACKET_HEADER; //начальные данные рассчета кс
-          pubPhase=5;
-       } else {
-          ESP_LOGE(TAG, "Invalid data. Header mismatch: %d", in);
+          if(in==BL0942_PACKET_HEADER){ // стартовый хидер
+             ((uint8_t*)(&buffer))[0]=BL0942_PACKET_HEADER;
+             inpos=1; // начало сохранения буфера  
+             checksum=BL0942_READ_COMMAND+BL0942_PACKET_HEADER; //начальные данные рассчета кс
+             pubPhase=3;
+          } else {
+             ESP_LOGE(TAG, "Invalid data. Header mismatch: %d", in);
+          }
        }
     }
-  } else if(pubPhase<5){
+  } else if(pubPhase<3){
      if(pubPhase==0){ 
-        if (voltage_sensor_ != nullptr) {
-          float v_rms = (uint24_t) buffer.v_rms / voltage_reference_;
-          voltage_sensor_->publish_state(v_rms);
-        }
-        pubPhase=1;
-     } else if(pubPhase==1){ 
         if (current_sensor_ != nullptr) {
           float i_rms = (uint24_t) buffer.i_rms / current_reference_;
           current_sensor_->publish_state(i_rms);
         }
-        pubPhase=2;
-     } else if(pubPhase==2){ 
         if (power_sensor_ != nullptr) {
            float watt = (int24_t) buffer.watt / power_reference_;
            power_sensor_->publish_state(watt);
         }
-        pubPhase=3;
-     } else if(pubPhase==3){ 
+        pubPhase=1;
+     } else if(pubPhase==1){ 
+        if (voltage_sensor_ != nullptr) {
+          float v_rms = (uint24_t) buffer.v_rms / voltage_reference_;
+          voltage_sensor_->publish_state(v_rms);
+        }
+        if (frequency_sensor_ != nullptr) {
+           float frequency = 1000000.0f / buffer.frequency;
+           frequency_sensor_->publish_state(frequency);
+        }
+        pubPhase=2;
+     } else if(pubPhase==2){ 
         if (energy_sensor_ != nullptr) {
            uint32_t cf_cnt = (uint24_t) buffer.cf_cnt;
            float total_energy_consumption = cf_cnt / energy_reference_;
            energy_sensor_->publish_state(total_energy_consumption);
         }
-        pubPhase=4;
-     } else if(pubPhase==4){ 
-        if (frequency_sensor_ != nullptr) {
-           float frequency = 1000000.0f / buffer.frequency;
-           frequency_sensor_->publish_state(frequency);
-        }
-        pubPhase=5;
+        pubPhase=3;
      }
+  } if(needUpdate){
+     this->write_byte(BL0942_READ_COMMAND);
+     this->write_byte(BL0942_FULL_PACKET);
+     needUpdate=false;
   }
 }
 
 void BL0942::update() {
-  //this->flush();
-  this->write_byte(BL0942_READ_COMMAND);
-  this->write_byte(BL0942_FULL_PACKET);
+  needUpdate=true;
 }
 
 void BL0942::setup() {
